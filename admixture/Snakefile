@@ -1,0 +1,233 @@
+
+
+
+ADMIXTURE_K = str(26)
+
+##########################################################################################
+# create jobs directory
+##########################################################################################
+
+JOBS_DIR = "Output/jobs_files"
+
+if not os.path.exists(JOBS_DIR):
+    os.makedirs(JOBS_DIR)
+
+
+
+CHRS  = [str(chr) for chr in range(1,23)]
+print(CHRS)
+
+##########################################################################################
+# rules
+##########################################################################################
+
+rule all:
+	input:
+		q_file = "Output/admixutre/all." + ADMIXTURE_K + ".Q",
+		p_file = "Output/admixutre/all." + ADMIXTURE_K + ".P"
+		#"Output/g1k_filtered/all.bed"
+		#expand("Output/g1k_filtered/chr{chr}.bed",chr=CHRS)
+
+##########################################################################################
+# downloading 1000 genomes
+##########################################################################################
+
+
+# downloading 1000 genomes VCFs
+rule download_vcf_from_g1k:
+	output:
+		"Output/g1k/integrated_call_samples_v3.20130502.ALL.panelz"
+	params:
+		output_file = "ALL.chr{chr}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
+		job_out_dir="Output/jobs_files",
+		job_out_file="download_g1k_{chr}",
+		job_name="download_g1k_{chr}",
+		run_time="06:00:00",
+		cores="1",
+		memory="4"
+	shell:
+		"cd Output/g1k && wget ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/{params.output_file} && cd ../.."
+
+rule download_samples_pop:
+	output:
+		"Output/g1k/integrated_call_samples_v3.20130502.ALL.panel"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="download_g1k_pop",
+		job_name="download_g1k_pop",
+		run_time="06:00:00",
+		cores="1",
+		memory="4"
+	shell:
+		"cd Output/g1k && wget ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel && cd ../.."
+
+#ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel
+
+
+# filtering A/T C/G and ids that contain ";" (multiple ids)
+
+rule filter_vcfs:
+	input:
+		vcf = "Output/g1k/ALL.chr{chr}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz"
+	output:
+		vcf = "Output/g1k/ALL.chr{chr}.vcf",
+		exclude_ids = "Output/g1k/ALL.chr{chr}.exclude_ids.txt",
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="filter_vcf_{chr}",
+		job_name="filter_vcf_{chr}",
+		run_time="06:00:00",
+		cores="1",
+		memory="4"
+	shell:
+		"./detect_exclude_ids_in_vcf.py {input.vcf} {output.vcf} {output.exclude_ids}"
+
+
+		
+rule filter_SNPs:
+	input:
+		"Output/g1k/ALL.chr{chr}.vcf"
+	output:
+		bed = "Output/g1k_filtered/chr{chr}.bed",
+		bim = "Output/g1k_filtered/chr{chr}.bim",
+		fam = "Output/g1k_filtered/chr{chr}.fam",
+		dupvar = "Output/g1k_filtered/chr{chr}.dupvar"
+	params:
+		output_prefix = "Output/g1k_filtered/chr{chr}",
+		job_out_dir="Output/jobs_files",
+		job_out_file="g1k_filter_{chr}",
+		job_name="g1k_filter_{chr}",
+		run_time="06:00:00",
+		cores="1",
+		memory="4"
+	shell:
+		"plink2 --vcf {input}"
+		" --make-bed --out {params.output_prefix}"
+		" --maf 0.1 --geno 0.1 --mind 0.1 --hwe 0.00001"
+		" --biallelic-only strict --list-duplicate-vars ids-only suppress-first "
+
+rule get_prune_snps_list:
+	input:
+		bed = "Output/g1k_filtered/chr{chr}.bed",
+		bim = "Output/g1k_filtered/chr{chr}.bim",
+		fam = "Output/g1k_filtered/chr{chr}.fam"
+	output:
+		prune_out = "Output/g1k_filtered/chr{chr}.prune.out",
+		prune_in = "Output/g1k_filtered/chr{chr}.prune.in"
+	params:
+		input_prefix = "Output/g1k_filtered/chr{chr}",
+		job_out_dir="Output/jobs_files",
+		job_out_file="prune_lst_{chr}",
+		job_name="prune_lst_{chr}",
+		run_time="06:00:00",
+		cores="1",
+		memory="4"
+	shell:
+		"plink2 --bfile {params.input_prefix} "
+		" --indep-pairwise 1000kb 1 0.3"
+		" --out {params.input_prefix} "
+	
+rule prune_snps:
+	input:
+		bed = "Output/g1k_filtered/chr{chr}.bed",
+		bim = "Output/g1k_filtered/chr{chr}.bim",
+		fam = "Output/g1k_filtered/chr{chr}.fam",
+		prune_out = "Output/g1k_filtered/chr{chr}.prune.out",
+		prune_in = "Output/g1k_filtered/chr{chr}.prune.in",
+		dupvar = "Output/g1k_filtered/chr{chr}.dupvar"
+	output:
+		bed = "Output/g1k_pruned/chr{chr}.bed",
+		bim = "Output/g1k_pruned/chr{chr}.bim",
+		fam = "Output/g1k_pruned/chr{chr}.fam"
+	params:
+		input_prefix = "Output/g1k_filtered/chr{chr}",
+		output_prefix = "Output/g1k_pruned/chr{chr}",
+		job_out_dir="Output/jobs_files",
+		job_out_file="prune_snps_{chr}",
+		job_name="prune_snps_{chr}",
+		run_time="06:00:00",
+		cores="1",
+		memory="4"
+	shell:
+		"plink2 --bfile {params.input_prefix} "
+		" --make-bed --out {params.output_prefix}"
+		" --exclude {input.dupvar} --extract {input.prune_in}"
+
+
+# todo filter SNP with multiple rsid (";") in ID
+
+
+rule create_file_list:
+	input:
+		expand("Output/g1k_pruned/chr{chr}.bed", chr=CHRS)
+	output:
+		merge_list = "Output/g1k_pruned/chrs_file_list.txt"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="create_merge_list",
+		job_name="create_merge_list",
+		run_time="01:00:00",
+		cores="1",
+		memory="4"
+	run:
+		with open(output.merge_list, 'w') as outf:
+			for chr in CHRS:
+       	outf.write("Output/g1k_pruned/chr" + chr + ".bed" + ' ')
+       	outf.write("Output/g1k_pruned/chr" + chr + ".bim" + ' ')
+       	outf.write("Output/g1k_pruned/chr" + chr + ".fam" + '\n')
+		
+
+rule merge_filtered_beds:
+	input:
+		expand("Output/g1k_pruned/chr{chr}.bed", chr=CHRS),
+		merge_list = "Output/g1k_pruned/chrs_file_list.txt"
+	output:
+		bed = "Output/g1k_pruned/all.bed",
+		bim = "Output/g1k_pruned/all.bim",
+		fam = "Output/g1k_pruned/all.fam",
+	params:
+		output_prefix = "Output/g1k_pruned/all",
+		job_out_dir="Output/jobs_files",
+		job_out_file="merge_chrs",
+		job_name="merge_chrs",
+		run_time="10:00:00",
+		cores="4",
+		memory="30"
+	shell:
+		"plink2 --merge-list {input.merge_list} --make-bed --out {params.output_prefix} --biallelic-only strict --list-duplicate-vars ids-only suppress-first"
+
+
+
+##########################################################################################
+# running admixture
+##########################################################################################
+
+
+
+rule run_g1k_admixture:
+	input:
+		bed = "Output/g1k_pruned/all.bed",
+		bim = "Output/g1k_pruned/all.bim",
+		fam = "Output/g1k_pruned/all.fam"
+	output:
+		q_file = "Output/admixutre/all." + ADMIXTURE_K + ".Q",
+		p_file = "Output/admixutre/all." + ADMIXTURE_K + ".P"
+	params:
+		output_bed_relPath = "../../Output/g1k_pruned/all.bed",
+		job_out_dir="Output/jobs_files",
+		job_out_file="run_admix",
+		job_name="run_admix",
+		run_time="47:59:00",
+		cores="8",
+		memory="30"
+	shell:
+		"cd Output/admixutre && ../../admixture_linux-1.3.0/admixture {params.output_bed_relPath} {ADMIXTURE_K} -j8 && cd ../.."
+		
+
+
+
+
+
+
+
+		
