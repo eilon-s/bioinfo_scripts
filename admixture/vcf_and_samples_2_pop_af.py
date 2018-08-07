@@ -11,7 +11,7 @@ from pysam import VariantFile
 from collections import defaultdict
 
 
-def get_af(in_vcf_filename,in_smaples_pop_filename, output_af_filename):
+def get_af(in_vcf_filename,in_smaples_pop_filename, output_af_filename, admixture_out):
   """
   Getting allele frequencies for allele frequencies in pop
   """
@@ -24,6 +24,16 @@ def get_af(in_vcf_filename,in_smaples_pop_filename, output_af_filename):
 
   #parsing VCF and wrting AF table
   out_header = '\t'.join(('CHROM','POS','ID','REF','ALT')) + '\t'.join(pop_sample_dict.keys())
+  
+  if admixture_out is not None:
+    out_admix_P_fh = open(admixture_out + '.P', 'w')
+    
+    with open(admixture_out + '.pop', 'w') as out_admix_pop_fh:
+      out_admix_pop_fh.write('\n'.join(pop_sample_dict.keys()) + '\n')
+    
+    
+  
+  
   
   line_cnt = 0
   with open(output_af_filename, 'w') as out_fh, VariantFile(in_vcf_filename) as in_vcf:
@@ -43,6 +53,8 @@ def get_af(in_vcf_filename,in_smaples_pop_filename, output_af_filename):
         cur_rec_info_str = '\t'.join([cur_chrom,str(cur_pos),cur_id,cur_ref,cur_alt])
         out_fh.write(cur_rec_info_str)
         
+        first_pop_flag = True
+        
         for pop in pop_sample_dict.keys():
             ref_cnt = 0.0
             alt_cnt = 0.0
@@ -61,7 +73,18 @@ def get_af(in_vcf_filename,in_smaples_pop_filename, output_af_filename):
             else:
                 cur_af = np.nan # 'nan' string will be written. TODO - is ok?
             out_fh.write('\t' + str(cur_af))
-        out_fh.write('\n')  
+            
+            if admixture_out is not None:
+                if not first_pop_flag:
+                  out_admix_P_fh.write('\t')
+                out_admix_P_fh.write(str(cur_af))
+                
+        if admixture_out is not None:
+            out_admix_P_fh.write('\n')
+            
+        out_fh.write('\n')
+  if admixture_out is not None:
+    close(out_admix_P_fh)
 
 
 
@@ -73,13 +96,16 @@ def main():
   parser.add_argument("in_smaples_pop_filename", type=str, help= "samples pop. file (for example: integrated_call_samples_v3.20130502.ALL.panel)") # 
   parser.add_argument("output_af_filename", type=str, help= "Output file of AF by populations. NOTE - if not bi-allelic will consider only ref and first alt alleles")
   
+  parser.add_argument("-a", "--admixture_out", dest='admixture_out', default=None, type=str,
+                      help='prefix for admixture .P file, will also output .pop file for population order')
+  
   args = parser.parse_args()
     
   print('Starting....')
   
   
     
-  get_af(args.in_vcf_filename,args.in_smaples_pop_filename, args.output_af_filename)
+  get_af(args.in_vcf_filename,args.in_smaples_pop_filename, args.output_af_filename, args.admixture_out)
     
   print('Done!')
 
