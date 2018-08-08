@@ -84,7 +84,7 @@ def get_af(in_vcf_filename,in_smaples_pop_filename, output_af_filename, admixtur
             
         out_fh.write('\n')
   if admixture_out is not None:
-    close(out_admix_P_fh)
+    out_admix_P_fh.close()
 
 
 
