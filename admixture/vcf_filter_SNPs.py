@@ -39,10 +39,10 @@ def write_exclude_ids(in_vcf_filename, filtered_vcf,
               continue
             
             if ( (exclude_AT_CG) and
-                 ( ( (cur_A1 == 'A') and (cur_A1 == 'T') ) or
-                   ( (cur_A1 == 'T') and (cur_A1 == 'A') ) or
-                   ( (cur_A1 == 'G') and (cur_A1 == 'C') ) or
-                   ( (cur_A1 == 'C') and (cur_A1 == 'G') ) ) ):
+                 ( ( (cur_A1 == 'A') and (cur_A2 == 'T') ) or
+                   ( (cur_A1 == 'T') and (cur_A2 == 'A') ) or
+                   ( (cur_A1 == 'G') and (cur_A2 == 'C') ) or
+                   ( (cur_A1 == 'C') and (cur_A2 == 'G') ) ) ):
               print("Found A/T C/G SNP %s" % (cur_id))
               continue
             
